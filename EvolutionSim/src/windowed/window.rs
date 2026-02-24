@@ -1,7 +1,7 @@
 #![allow(temporary_cstring_as_ptr)]
 
 use std::alloc::{self, Layout};
-use std::ffi::c_void;
+use std::ffi::{CStr, c_void};
 use std::ptr::{self, write};
 use std::rc::Rc;
 use std::{ffi::CString, os::raw::c_char};
@@ -37,7 +37,19 @@ impl Window {
         height: i32,
     ) -> Option<Window> {
         let ptr = unsafe {
-            glfw::ffi::glfwInit();
+            let result = glfw::ffi::glfwInit();
+            if result != glfw::ffi::GLFW_TRUE {
+                let mut string = ptr::null::<core::ffi::c_char>();
+                // SAFETY:
+                //
+                // TODO:
+                let result = glfw::ffi::glfwGetError(&mut string);
+                if !string.is_null() {
+                    let c_str = CStr::from_ptr(string);
+                    eprintln!("{c_str:?}");
+                }
+                return None;
+            }
 
             let ptr = glfw::ffi::glfwCreateWindow(
                 width,
@@ -48,6 +60,15 @@ impl Window {
             );
 
             if ptr == std::ptr::null_mut() as *mut glfw::ffi::GLFWwindow {
+                let mut string = ptr::null::<core::ffi::c_char>();
+                // SAFETY:
+                //
+                // TODO:
+                let result = glfw::ffi::glfwGetError(&mut string);
+                if !string.is_null() {
+                    let c_str = CStr::from_ptr(string);
+                    eprintln!("{c_str:?}");
+                }
                 return None;
             };
 
@@ -296,7 +317,7 @@ impl Drop for Window {
 
 extern "C" fn windowCloseCallback(window: *mut glfw::ffi::GLFWwindow) {
     unsafe {
-        glfw::ffi::glfwSetWindowShouldClose(window, glfw::ffi::TRUE);
+        glfw::ffi::glfwSetWindowShouldClose(window, glfw::ffi::GLFW_TRUE);
     }
 }
 
@@ -321,14 +342,14 @@ extern "C" fn keyCallback(
     action: i32,
     _mods: i32,
 ) {
-    if key == glfw::ffi::KEY_R && action == glfw::ffi::PRESS {
+    if key == glfw::ffi::GLFW_KEY_R && action == glfw::ffi::GLFW_PRESS {
         let ptr = unsafe { get_window_user_ptr(window) };
         unsafe { (*ptr).1.borrowMut().should_reset = true };
-    } else if key == glfw::ffi::KEY_SPACE && action == glfw::ffi::PRESS {
+    } else if key == glfw::ffi::GLFW_KEY_SPACE && action == glfw::ffi::GLFW_PRESS {
         let ptr = unsafe { get_window_user_ptr(window) };
         let paused = !unsafe { (*ptr).1.borrow().is_paused };
         unsafe { (*ptr).1.borrowMut().is_paused = paused };
-    } else if key == glfw::ffi::KEY_E && action == glfw::ffi::PRESS {
+    } else if key == glfw::ffi::GLFW_KEY_E && action == glfw::ffi::GLFW_PRESS {
         print!("\nNeuron Frequencies: \n");
         unsafe {
             for (index, count) in neuron_presence.iter().enumerate() {
@@ -336,10 +357,10 @@ extern "C" fn keyCallback(
             }
             println!();
         }
-    } else if key == glfw::ffi::KEY_ESCAPE {
-        unsafe { glfw::ffi::glfwSetWindowShouldClose(window, glfw::ffi::TRUE) };
-    } else if key == glfw::ffi::KEY_S && action == glfw::ffi::PRESS {
-    } else if key == glfw::ffi::KEY_C && action == glfw::ffi::PRESS {
+    } else if key == glfw::ffi::GLFW_KEY_ESCAPE {
+        unsafe { glfw::ffi::glfwSetWindowShouldClose(window, glfw::ffi::GLFW_TRUE) };
+    } else if key == glfw::ffi::GLFW_KEY_S && action == glfw::ffi::GLFW_PRESS {
+    } else if key == glfw::ffi::GLFW_KEY_C && action == glfw::ffi::GLFW_PRESS {
         let ptr = unsafe { get_window_user_ptr(window) };
 
         println!("\n{}", unsafe { (*ptr).0.to_string() });
@@ -355,10 +376,14 @@ unsafe fn get_window_user_ptr(window: *mut glfw::ffi::GLFWwindow) -> *mut UserPo
     ptr as *mut UserPointer
 }
 
-fn loadfn(symbol: &'static str) -> glfw::ffi::GLFWglproc {
-    glfw::with_c_str(symbol, |procname| unsafe {
+fn loadfn(symbol: &'static str) -> *const c_void {
+    let Some(func) = glfw::with_c_str(symbol, |procname| unsafe {
         glfw::ffi::glfwGetProcAddress(procname)
-    })
+    }) else {
+        return ptr::null();
+    };
+
+    func as *const c_void
 }
 
 pub fn wait(

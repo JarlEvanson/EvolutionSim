@@ -1,5 +1,5 @@
 #![allow(non_snake_case, non_upper_case_globals, temporary_cstring_as_ptr)]
-#![feature(trace_macros, new_uninit)]
+#![feature(trace_macros)]
 #![feature(test)]
 
 use std::slice::{Chunks, ChunksMut};

@@ -1,8 +1,11 @@
 [workspace]
-
 members = [
     "EvolutionSim",
+    "custom_dst",
 ]
+
+[workspace.dependencies]
+custom_dst = { path = "custom_dst" }
 
 [profile.release]
 #debug = true
